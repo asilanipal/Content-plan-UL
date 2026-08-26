@@ -162,7 +162,7 @@
   .overlay.show{display:flex;}
   #miniOverlay{z-index:70;}
   .modal{
-    background:var(--surface); color:var(--ink); border-radius:var(--radius-lg); width:100%; max-width:440px;
+    background:var(--surface); color:var(--ink); border-radius:var(--radius-lg); width:100%; max-width:540px;
     max-height:88vh; overflow-y:auto; box-shadow:var(--shadow-md); padding:24px 24px 20px;
     position:relative; animation:popIn .18s ease;
   }
@@ -240,6 +240,28 @@
   .text-link{color:var(--ink-soft); font-size:12.5px; font-weight:700; background:none; border:none; cursor:pointer; padding:6px 4px;}
   .text-link:hover{color:var(--accent); text-decoration:underline;}
   .hint{font-size:11px; color:var(--ink-faint); margin-top:4px;}
+
+  /* ===== Чек-лист ===== */
+  .cl-count{font-size:11px; font-weight:700; color:var(--ink-faint); background:var(--surface-tint); padding:2px 8px; border-radius:999px; margin-left:6px;}
+  .cl-row{display:flex; align-items:flex-start; gap:8px; padding:5px 0;}
+  .cl-circle{
+    width:20px; height:20px; border-radius:50%; border:1.5px solid var(--border); background:#fff;
+    cursor:pointer; flex:none; padding:0; position:relative; margin-top:1px; transition:.12s;
+  }
+  .cl-circle:hover{border-color:var(--accent);}
+  .cl-circle.done{background:var(--success); border-color:var(--success);}
+  .cl-circle.done::after{content:'✓'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:700;}
+  .cl-text{flex:1; font-size:13.5px; line-height:1.4; word-break:break-word; white-space:pre-wrap; padding-top:1px; color:var(--ink);}
+  .cl-text.done{color:var(--ink-faint); text-decoration:line-through;}
+  .cl-del{opacity:0; border:none; background:transparent; color:var(--ink-faint); cursor:pointer; font-size:15px; flex:none; padding:0 2px; transition:.15s;}
+  .cl-row:hover .cl-del{opacity:1;}
+  .cl-del:hover{color:#C6362E;}
+  .cl-add-row{
+    display:flex; align-items:center; gap:8px; border:1.5px dashed var(--border); border-radius:var(--radius-sm);
+    padding:8px 10px; margin-top:6px;
+  }
+  .cl-add-icon{color:var(--ink-faint); font-size:15px; flex:none;}
+  .cl-add-row input{border:none; outline:none; flex:1; font-size:13.5px; font-family:'Inter',sans-serif; background:transparent; color:var(--ink);}
   .img-upload-label{cursor:pointer;}
   .backlog-row{
     border:1px solid var(--border-light); border-radius:var(--radius-sm); padding:10px 34px 10px 12px;
@@ -386,7 +408,7 @@
    ДАННЫЕ И СОСТОЯНИЕ
    ========================================================= */
 const STORAGE_KEY = 'content-plan-v1';
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 const DEFAULT_DATA = {
   schemaVersion: SCHEMA_VERSION,
@@ -516,6 +538,19 @@ function migrateIfNeeded(){
     data.typeTags = data.typeTags.filter(t=>t.id!=='webinar');
     data.posts.forEach(p=>{ if(p.types) p.types = p.types.filter(x=>x!=='webinar'); });
     filters.types.delete('webinar');
+  }
+
+  if(v < 7){
+    // тег со случайно выпавшим серым цветом сливался с невыбранным фильтром — перекрашиваем
+    const safePalette = ['#E0894F','#1BA743','#D1596F','#8F6FD1','#337FFF'];
+    let paletteIdx = 0;
+    data.typeTags.forEach(t=>{
+      if(t.color === '#75747E'){
+        t.color = safePalette[paletteIdx % safePalette.length];
+        paletteIdx++;
+      }
+    });
+    data.posts.forEach(p=>{ if(!Array.isArray(p.checklist)) p.checklist = []; });
   }
 
   data.schemaVersion = SCHEMA_VERSION;
@@ -795,8 +830,11 @@ function renderGrid(){
 
 function borderColorForPost(post){
   const types = post.types || [];
-  if(types.includes('event2')) return 'var(--info)';
-  if(types.includes('mail')) return 'var(--success)';
+  const labels = types.map(tid=>{ const t = tagById(data.typeTags, tid); return (t?t.label:'').toLowerCase(); });
+  const has = (needle)=> labels.some(l=>l.includes(needle));
+  if(has('ивент')) return 'var(--info)';
+  if(has('рассылк')) return 'var(--success)';
+  if(has('seo') || has('сео') || has('онпейдж') || has('on-page') || has('onpage')) return 'var(--ink-faint)';
   return 'var(--accent)';
 }
 
@@ -842,7 +880,7 @@ function openModal(postId, date){
 
   const post = postId ? data.posts.find(p=>p.id===postId) : {
     id: uid(), date, title:'', about:'', platforms:[], formats:[], types:[],
-    status: DEFAULT_STATUS, flag:'', responsible:'', link:'', comment:'', hasImage:false,
+    status: DEFAULT_STATUS, flag:'', responsible:'', link:'', comment:'', hasImage:false, checklist:[],
     order: data.posts.filter(p=>p.date===date).length
   };
 
@@ -879,7 +917,7 @@ function renderModal(post, isNew, forceOpen){
     </div>
 
     <div class="field"><label>О чём</label>
-      <input type="text" id="f_about" maxlength="160" value="${escapeAttr(post.about||'')}" placeholder="Коротко о содержании публикации">
+      <textarea id="f_about" maxlength="160" placeholder="Коротко о содержании публикации" style="min-height:44px;">${escapeHtml(post.about||'')}</textarea>
     </div>
 
     <div class="field"><label>Дата</label>
@@ -946,6 +984,8 @@ function renderModal(post, isNew, forceOpen){
       <input type="url" id="f_link" value="${escapeAttr(post.link||'')}" placeholder="https://...">
     </div>
 
+    ${renderChecklistField(post)}
+
     <div class="modal-actions">
       <div>${isNew ? '' : '<button class="text-link" id="duplicateBtn">Дублировать</button><button class="danger-link" id="deleteBtn">Удалить пост</button>'}</div>
       <div style="display:flex; gap:8px;">
@@ -1008,6 +1048,41 @@ function renderModal(post, isNew, forceOpen){
     };
   });
 
+  body.querySelectorAll('[data-cl-toggle]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.clToggle;
+      const updated = collectFormIntoPost(post);
+      const item = (updated.checklist||[]).find(i=>i.id===id);
+      if(item) item.done = !item.done;
+      renderModal(updated, editingId===null);
+      restoreImagePreviewIfAny(updated);
+    };
+  });
+  body.querySelectorAll('[data-cl-del]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.clDel;
+      const updated = collectFormIntoPost(post);
+      updated.checklist = (updated.checklist||[]).filter(i=>i.id!==id);
+      renderModal(updated, editingId===null);
+      restoreImagePreviewIfAny(updated);
+    };
+  });
+  const clNewInput = document.getElementById('f_cl_new');
+  if(clNewInput){
+    clNewInput.addEventListener('keydown', (e)=>{
+      if(e.key !== 'Enter') return;
+      e.preventDefault();
+      const text = clNewInput.value.trim();
+      if(!text) return;
+      const updated = collectFormIntoPost(post);
+      if(!Array.isArray(updated.checklist)) updated.checklist = [];
+      updated.checklist.push({ id: uid(), text, done:false });
+      renderModal(updated, editingId===null);
+      restoreImagePreviewIfAny(updated);
+      setTimeout(()=>{ const ni = document.getElementById('f_cl_new'); if(ni) ni.focus(); }, 20);
+    });
+  }
+
   const clipBtn = document.getElementById('clipBtn');
   const fileInput = document.getElementById('f_image');
   if(clipBtn) clipBtn.onclick = ()=> fileInput.click();
@@ -1050,6 +1125,7 @@ async function duplicatePost(post){
   dup.title = (current.title || 'Без названия') + ' (копия)';
   dup.order = data.posts.filter(p=>p.date===current.date).length;
   dup.hasImage = false;
+  dup.checklist = (current.checklist||[]).map(i=>({ id: uid(), text: i.text, done: i.done }));
   data.posts.push(dup);
 
   const savedPendingImage = pendingImageData;
@@ -1072,6 +1148,29 @@ async function duplicatePost(post){
   pendingImageRemoved = false;
   renderModal(dup, false);
   restoreImagePreviewIfAny(dup);
+}
+
+function renderChecklistField(post){
+  const items = post.checklist || [];
+  const doneCount = items.filter(i=>i.done).length;
+  return `
+    <div class="field">
+      <label>Чек-лист${items.length ? `<span class="cl-count">${doneCount}/${items.length}</span>` : ''}</label>
+      <div id="clList">${items.map(checklistItemHtml).join('')}</div>
+      <div class="cl-add-row">
+        <span class="cl-add-icon">＋</span>
+        <input type="text" id="f_cl_new" placeholder="Новая задача...">
+      </div>
+      <div class="hint">Enter — добавить пункт</div>
+    </div>
+  `;
+}
+function checklistItemHtml(item){
+  return `<div class="cl-row">
+    <button type="button" class="cl-circle${item.done?' done':''}" data-cl-toggle="${escapeAttr(item.id)}" title="${item.done?'Снять отметку':'Отметить как сделано'}"></button>
+    <span class="cl-text${item.done?' done':''}">${escapeHtml(item.text)}</span>
+    <button type="button" class="cl-del" data-cl-del="${escapeAttr(item.id)}" title="Удалить пункт">×</button>
+  </div>`;
 }
 
 function pillHtml(kind, id, label, selected, bg, fg, deletable){
@@ -1108,7 +1207,7 @@ function promptAddTag(kind, post){
       {bg:'#DDE7FF',fg:'#2A50B8'},{bg:'#FFE8DC',fg:'#B25A1E'},{bg:'#FFE1E1',fg:'#C42F36'},
       {bg:'#DFF3E5',fg:'#0E7A34'},{bg:'#EFEEF3',fg:'#4A4952'},{bg:'#FFE2D3',fg:'#C24500'}
     ];
-    const typeColors = ['#E0894F','#1BA743','#D1596F','#8F6FD1','#337FFF','#75747E'];
+    const typeColors = ['#E0894F','#1BA743','#D1596F','#8F6FD1','#337FFF'];
     const id = 'c_' + Date.now().toString(36);
     if(kind==='platform'){
       const c = platformPalette[Math.floor(Math.random()*platformPalette.length)];
@@ -1142,6 +1241,7 @@ function deleteTag(kind, id, post){
 
 function collectFormIntoPost(base){
   const p = Object.assign({}, base);
+  p.checklist = (base.checklist||[]).map(i=>({ id:i.id, text:i.text, done:i.done }));
   const get = id => document.getElementById(id);
   if(get('f_title')) p.title = get('f_title').value;
   if(get('f_about')) p.about = get('f_about').value;
