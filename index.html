@@ -23,6 +23,8 @@
     --accent-soft:#FFF1EB;
     --success:#1BA743;
     --success-soft:#E6F6EB;
+    --info:#337FFF;
+    --info-soft:#F2F7FF;
     --radius-lg:20px;
     --radius-md:12px;
     --radius-sm:9px;
@@ -791,11 +793,21 @@ function renderGrid(){
   });
 }
 
+function borderColorForPost(post){
+  const types = post.types || [];
+  if(types.includes('event2')) return 'var(--info)';
+  if(types.includes('mail')) return 'var(--success)';
+  return 'var(--accent)';
+}
+
 function renderCard(post){
   const el = document.createElement('div');
   el.className = 'post-card' + (post.status==='done' ? ' status-done' : '');
   el.draggable = true;
   el.dataset.id = post.id;
+  if(post.status !== 'done'){
+    el.style.borderColor = borderColorForPost(post);
+  }
 
   const platformBadges = (post.platforms||[]).map(pid=>{
     const t = tagById(data.platformTags, pid);
