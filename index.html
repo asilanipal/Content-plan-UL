@@ -25,6 +25,7 @@
     --success-soft:#E6F6EB;
     --info:#337FFF;
     --info-soft:#F2F7FF;
+    --violet:#8F6FD1;
     --radius-lg:20px;
     --radius-md:12px;
     --radius-sm:9px;
@@ -408,7 +409,7 @@
    ДАННЫЕ И СОСТОЯНИЕ
    ========================================================= */
 const STORAGE_KEY = 'content-plan-v1';
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 const DEFAULT_DATA = {
   schemaVersion: SCHEMA_VERSION,
@@ -434,7 +435,8 @@ const DEFAULT_DATA = {
     {id:'soc',     label:'Публикация СС',   color:'#E0894F'},
     {id:'blogpub', label:'Публикация блог', color:'#1BA743'},
     {id:'mail',    label:'Рассылка',        color:'#D1596F'},
-    {id:'event2',  label:'Ивент',           color:'#8F6FD1'}
+    {id:'event2',  label:'Ивент',           color:'#8F6FD1'},
+    {id:'kb',       label:'База знаний',     color:'#0EA5C4'}
   ],
   responsibles: [],
   backlog: [],
@@ -551,6 +553,12 @@ function migrateIfNeeded(){
       }
     });
     data.posts.forEach(p=>{ if(!Array.isArray(p.checklist)) p.checklist = []; });
+  }
+
+  if(v < 8){
+    // добавляем тег «База знаний», если его ещё нет
+    const hasKB = data.typeTags.some(t=>t.label.toLowerCase().includes('база знан'));
+    if(!hasKB) data.typeTags.push({id:'kb', label:'База знаний', color:'#0EA5C4'});
   }
 
   data.schemaVersion = SCHEMA_VERSION;
@@ -834,6 +842,7 @@ function borderColorForPost(post){
   const has = (needle)=> labels.some(l=>l.includes(needle));
   if(has('ивент')) return 'var(--info)';
   if(has('рассылк')) return 'var(--success)';
+  if(has('база знан')) return 'var(--violet)';
   if(has('seo') || has('сео') || has('онпейдж') || has('on-page') || has('onpage')) return 'var(--ink-faint)';
   return 'var(--accent)';
 }
@@ -917,7 +926,7 @@ function renderModal(post, isNew, forceOpen){
     </div>
 
     <div class="field"><label>О чём</label>
-      <textarea id="f_about" maxlength="160" placeholder="Коротко о содержании публикации" style="min-height:44px;">${escapeHtml(post.about||'')}</textarea>
+      <textarea id="f_about" maxlength="160" placeholder="Коротко о содержании публикации" style="min-height:44px; max-height:200px; overflow-y:auto;">${escapeHtml(post.about||'')}</textarea>
     </div>
 
     <div class="field"><label>Дата</label>
@@ -996,6 +1005,13 @@ function renderModal(post, isNew, forceOpen){
   `;
 
   document.getElementById('modalCloseBtn').onclick = closeModal;
+
+  const aboutEl = document.getElementById('f_about');
+  if(aboutEl){
+    const growAbout = ()=>{ aboutEl.style.height = 'auto'; aboutEl.style.height = aboutEl.scrollHeight + 'px'; };
+    aboutEl.addEventListener('input', growAbout);
+    growAbout();
+  }
   setupPillGroup('f_status', false);
   setupPillGroup('f_platforms', true);
   setupPillGroup('f_format', true);
