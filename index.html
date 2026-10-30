@@ -26,6 +26,7 @@
     --info:#337FFF;
     --info-soft:#F2F7FF;
     --violet:#8F6FD1;
+    --magenta:#C2379A;
     --radius-lg:20px;
     --radius-md:12px;
     --radius-sm:9px;
@@ -409,7 +410,7 @@
    ДАННЫЕ И СОСТОЯНИЕ
    ========================================================= */
 const STORAGE_KEY = 'content-plan-v1';
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 const DEFAULT_DATA = {
   schemaVersion: SCHEMA_VERSION,
@@ -436,7 +437,8 @@ const DEFAULT_DATA = {
     {id:'blogpub', label:'Публикация блог', color:'#1BA743'},
     {id:'mail',    label:'Рассылка',        color:'#D1596F'},
     {id:'event2',  label:'Ивент',           color:'#8F6FD1'},
-    {id:'kb',       label:'База знаний',     color:'#0EA5C4'}
+    {id:'kb',       label:'База знаний',     color:'#0EA5C4'},
+    {id:'rebuild',  label:'Ребилд сайта',    color:'#C2379A'}
   ],
   responsibles: [],
   backlog: [],
@@ -559,6 +561,12 @@ function migrateIfNeeded(){
     // добавляем тег «База знаний», если его ещё нет
     const hasKB = data.typeTags.some(t=>t.label.toLowerCase().includes('база знан'));
     if(!hasKB) data.typeTags.push({id:'kb', label:'База знаний', color:'#0EA5C4'});
+  }
+
+  if(v < 9){
+    // добавляем тег «Ребилд сайта», если его ещё нет
+    const hasRebuild = data.typeTags.some(t=>t.label.toLowerCase().includes('ребилд'));
+    if(!hasRebuild) data.typeTags.push({id:'rebuild', label:'Ребилд сайта', color:'#C2379A'});
   }
 
   data.schemaVersion = SCHEMA_VERSION;
@@ -843,6 +851,7 @@ function borderColorForPost(post){
   if(has('ивент')) return 'var(--info)';
   if(has('рассылк')) return 'var(--success)';
   if(has('база знан')) return 'var(--violet)';
+  if(has('ребилд')) return 'var(--magenta)';
   if(has('seo') || has('сео') || has('онпейдж') || has('on-page') || has('onpage')) return 'var(--ink-faint)';
   return 'var(--accent)';
 }
